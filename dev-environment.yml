@@ -97,6 +97,89 @@
             name: golangci-lint
             classic: yes
 
+    - name: Install Go development tools
+      block:
+        - name: Install goimports
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install golang.org/x/tools/cmd/goimports@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install golines
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install github.com/segmentio/golines@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install gofumpt (enhanced gofmt)
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install mvdan.cc/gofumpt@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install gopls (Go language server)
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install golang.org/x/tools/gopls@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install staticcheck
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install honnef.co/go/tools/cmd/staticcheck@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install go-task
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install github.com/go-task/task/v3/cmd/task@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install air (live reload for Go)
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install github.com/air-verse/air@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install gotestsum
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install gotest.tools/gotestsum@latest
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Install delve debugger
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            go install github.com/go-delve/delve/cmd/dlv@latest
+          args:
+            executable: /bin/bash
+          become: no
+
     - name: Install GitHub CLI
       block:
         - name: Install wget if not present
@@ -301,6 +384,33 @@
           register: docker_version_output
           changed_when: false
 
+        - name: Check goimports version
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            goimports -version 2>&1 || echo "goimports installed"
+          register: goimports_version_output
+          changed_when: false
+          become: no
+
+        - name: Check golines version
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            golines --version 2>&1 || echo "golines installed"
+          register: golines_version_output
+          changed_when: false
+          become: no
+
+        - name: Check gofumpt version
+          shell: |
+            export GOPATH=$HOME/go
+            export PATH=$PATH:/snap/bin:$GOPATH/bin
+            gofumpt --version
+          register: gofumpt_version_output
+          changed_when: false
+          become: no
+
         - name: Display installation results
           debug:
             msg:
@@ -311,3 +421,6 @@
               - "make: {{ make_version_output.stdout_lines[0] }}"
               - "GitHub CLI: {{ gh_version_output.stdout_lines[0] }}"
               - "Docker: {{ docker_version_output.stdout }}"
+              - "goimports: {{ goimports_version_output.stdout }}"
+              - "golines: {{ golines_version_output.stdout }}"
+              - "gofumpt: {{ gofumpt_version_output.stdout }}"
