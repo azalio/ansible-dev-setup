@@ -1,0 +1,8 @@
+[dev-servers]
+# Замените на IP адрес или hostname вашего сервера разработки
+# Пример:
+# 192.168.1.100 ansible_user=ubuntu
+# dev-server.example.com ansible_user=developer
+
+# Для локального сервера (если запускаете на том же сервере):
+localhost ansible_connection=local

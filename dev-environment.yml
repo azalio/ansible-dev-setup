@@ -1,0 +1,313 @@
+---
+- name: Setup Developer Environment
+  hosts: all
+  become: yes
+  vars:
+    node_version: "22"
+    go_version: "1.24.4"
+    golangci_lint_version: "v2.1.6"
+
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install required packages
+      apt:
+        name:
+          - curl
+          - wget
+          - git
+          - build-essential
+          - make
+        state: present
+
+    - name: Install Node.js via nvm
+      block:
+        - name: Download and install nvm
+          shell: |
+            curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.3/install.sh | bash
+          args:
+            creates: "{{ ansible_env.HOME }}/.nvm/nvm.sh"
+          become: no
+
+        - name: Source nvm and install Node.js
+          shell: |
+            . {{ ansible_env.HOME }}/.nvm/nvm.sh
+            nvm install {{ node_version }}
+            nvm use {{ node_version }}
+          args:
+            executable: /bin/bash
+          become: no
+
+        - name: Add nvm to bashrc
+          lineinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export NVM_DIR="$HOME/.nvm"'
+            create: yes
+          become: no
+
+        - name: Add nvm script to bashrc
+          lineinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            line: '[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"'
+            create: yes
+          become: no
+
+        - name: Add nvm bash completion to bashrc
+          lineinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            line: '[ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"'
+            create: yes
+          become: no
+
+    - name: Install Golang
+      block:
+        - name: Install Go via snap
+          snap:
+            name: go
+            classic: yes
+
+        - name: Add snap bin to PATH in bashrc
+          lineinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export PATH=$PATH:/snap/bin'
+            create: yes
+          become: no
+
+        - name: Set GOPATH in bashrc
+          lineinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export GOPATH=$HOME/go'
+            create: yes
+          become: no
+
+        - name: Add GOPATH/bin to PATH in bashrc
+          lineinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            line: 'export PATH=$PATH:$GOPATH/bin'
+            create: yes
+          become: no
+
+    - name: Install golangci-lint
+      block:
+        - name: Install golangci-lint via snap
+          snap:
+            name: golangci-lint
+            classic: yes
+
+    - name: Install GitHub CLI
+      block:
+        - name: Install wget if not present
+          apt:
+            name: wget
+            state: present
+
+        - name: Create APT keyrings directory
+          file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
+
+        - name: Download GitHub CLI GPG key
+          get_url:
+            url: https://cli.github.com/packages/githubcli-archive-keyring.gpg
+            dest: /etc/apt/keyrings/githubcli-archive-keyring.gpg
+            mode: '0644'
+
+        - name: Add GitHub CLI repository
+          apt_repository:
+            repo: "deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main"
+            state: present
+            filename: github-cli
+
+        - name: Install GitHub CLI
+          apt:
+            name: gh
+            state: present
+            update_cache: yes
+
+    - name: Install Docker
+      block:
+        - name: Remove conflicting Docker packages
+          apt:
+            name:
+              - docker.io
+              - docker-doc
+              - docker-compose
+              - docker-compose-v2
+              - podman-docker
+              - containerd
+              - runc
+            state: absent
+
+        - name: Install Docker dependencies
+          apt:
+            name:
+              - ca-certificates
+              - curl
+            state: present
+            update_cache: yes
+
+        - name: Create keyrings directory
+          file:
+            path: /etc/apt/keyrings
+            state: directory
+            mode: '0755'
+
+        - name: Download Docker GPG key
+          get_url:
+            url: https://download.docker.com/linux/ubuntu/gpg
+            dest: /etc/apt/keyrings/docker.asc
+            mode: '0644'
+
+        - name: Add Docker repository
+          apt_repository:
+            repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+            state: present
+            filename: docker
+
+        - name: Update apt cache after adding Docker repository
+          apt:
+            update_cache: yes
+
+        - name: Install Docker packages
+          apt:
+            name:
+              - docker-ce
+              - docker-ce-cli
+              - containerd.io
+              - docker-buildx-plugin
+              - docker-compose-plugin
+            state: present
+
+        - name: Add user to docker group
+          user:
+            name: "{{ ansible_env.USER }}"
+            groups: docker
+            append: yes
+          become: no
+          when: ansible_env.USER is defined
+
+        - name: Start and enable Docker service
+          systemd:
+            name: docker
+            state: started
+            enabled: yes
+
+    - name: Install Oh My Bash
+      block:
+        - name: Install tmux (for tmux-autoattach plugin)
+          apt:
+            name: tmux
+            state: present
+
+        - name: Clone Oh My Bash repository
+          git:
+            repo: https://github.com/ohmybash/oh-my-bash.git
+            dest: "{{ ansible_env.HOME }}/.oh-my-bash"
+            version: master
+          become: no
+
+        - name: Backup existing .bashrc
+          copy:
+            src: "{{ ansible_env.HOME }}/.bashrc"
+            dest: "{{ ansible_env.HOME }}/.bashrc.pre-oh-my-bash"
+            remote_src: yes
+          become: no
+          ignore_errors: yes
+
+        - name: Copy Oh My Bash template
+          copy:
+            src: "{{ ansible_env.HOME }}/.oh-my-bash/templates/bashrc.osh-template"
+            dest: "{{ ansible_env.HOME }}/.bashrc"
+            remote_src: yes
+          become: no
+
+        - name: Configure Oh My Bash plugins
+          replace:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            regexp: '^plugins=\(.*\)$'
+            replace: |
+              plugins=(
+                git
+                bashmarks
+              )
+          become: no
+
+        - name: Add tmux-autoattach plugin for SSH sessions
+          blockinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            insertafter: '^plugins='
+            marker: "# {mark} ANSIBLE MANAGED BLOCK - tmux-autoattach"
+            block: |
+              [ "$SSH_TTY" ] && plugins+=(tmux-autoattach)
+          become: no
+
+        - name: Ensure PATH exports are preserved
+          blockinfile:
+            path: "{{ ansible_env.HOME }}/.bashrc"
+            marker: "# {mark} ANSIBLE MANAGED BLOCK - PATH exports"
+            block: |
+              export NVM_DIR="$HOME/.nvm"
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
+              export PATH=$PATH:/snap/bin
+              export GOPATH=$HOME/go
+              export PATH=$PATH:$GOPATH/bin
+          become: no
+
+    - name: Verify installations
+      block:
+        - name: Check Node.js version
+          shell: |
+            . {{ ansible_env.HOME }}/.nvm/nvm.sh
+            node --version
+          register: node_version_output
+          changed_when: false
+          become: no
+
+        - name: Check npm version
+          shell: |
+            . {{ ansible_env.HOME }}/.nvm/nvm.sh
+            npm --version
+          register: npm_version_output
+          changed_when: false
+          become: no
+
+        - name: Check Go version
+          command: go version
+          register: go_version_output
+          changed_when: false
+
+        - name: Check golangci-lint version
+          command: golangci-lint --version
+          register: golangci_version_output
+          changed_when: false
+
+        - name: Check make version
+          command: make --version
+          register: make_version_output
+          changed_when: false
+
+        - name: Check GitHub CLI version
+          command: gh --version
+          register: gh_version_output
+          changed_when: false
+
+        - name: Check Docker version
+          command: docker --version
+          register: docker_version_output
+          changed_when: false
+
+        - name: Display installation results
+          debug:
+            msg:
+              - "Node.js: {{ node_version_output.stdout }}"
+              - "npm: {{ npm_version_output.stdout }}"
+              - "Go: {{ go_version_output.stdout }}"
+              - "golangci-lint: {{ golangci_version_output.stdout }}"
+              - "make: {{ make_version_output.stdout_lines[0] }}"
+              - "GitHub CLI: {{ gh_version_output.stdout_lines[0] }}"
+              - "Docker: {{ docker_version_output.stdout }}"
