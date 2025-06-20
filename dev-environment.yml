@@ -322,9 +322,10 @@
         - name: Add tmux-autoattach plugin for SSH sessions
           blockinfile:
             path: "{{ ansible_env.HOME }}/.bashrc"
-            insertafter: '^plugins='
+            insertafter: '^plugins=\([^)]*\)$'
             marker: "# {mark} ANSIBLE MANAGED BLOCK - tmux-autoattach"
             block: |
+              
               [ "$SSH_TTY" ] && plugins+=(tmux-autoattach)
           become: no
 
@@ -388,7 +389,7 @@
           shell: |
             export GOPATH=$HOME/go
             export PATH=$PATH:/snap/bin:$GOPATH/bin
-            goimports -version 2>&1 || echo "goimports installed"
+            which goimports && echo "goimports installed" || echo "goimports not found"
           register: goimports_version_output
           changed_when: false
           become: no
